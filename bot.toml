@@ -1,7 +1,7 @@
 #:schema https://rlbot.org/schemas/agent.json
 [settings]
 # The name that will be displayed in game
-name = "Python Example"
+name = "Dawn"
 # Path to loadout config from runner
 loadout_file = "loadout.toml"
 # (OPTIONAL) - what you want the working directory set to
