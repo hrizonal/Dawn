@@ -59,6 +59,21 @@ class MyBot(Bot):
         angle_to_target = math.atan2(dy, dx) - my_car.physics.rotation.yaw
         angle_to_target = (angle_to_target + math.pi) % (2 * math.pi) - math.pi
         self.renderer.begin_rendering()
+        
+        if abs(ball_location.x) < 10 and abs(ball_location.y) < 10:
+            controls.steer = steer_toward_target(my_car, ball_location)
+            controls.throttle = 1.0
+            controls.boost = True
+
+            if car_location.dist(ball_location) < 650 and my_car.air_state == AirState.OnGround:
+                return self.begin_front_flip(packet)
+
+            return controls
+
+        team_sign = -1 if my_car.team == 0 else 1
+        own_goal_y = 5120.0 * team_sign
+        ball_in_our_half = (ball_location.y * team_sign) > -500
+        
         if self.ball_prediction is not None and len(self.ball_prediction.slices) > 0:
             # Check every 6th slice (every 0.05 seconds) up to 4 seconds ahead
             for i in range(6, min(480, len(self.ball_prediction.slices)), 6):
@@ -82,18 +97,22 @@ class MyBot(Bot):
                         BallAnchor(0), target_location, self.renderer.cyan
                     )
                     break
-        team_sign = -1 if my_car.team == 0 else 1
-        ball_in_our_half = (ball_location.y * team_sign) > -500
+        
 
         if ball_in_our_half:
+            allow_boost = True
+
             clear_x = 2500.0 if target_location.x >= 0 else -2500.0
             aim_point = Vec3(clear_x, -5120.0 * team_sign, 0.0)
-
+            ball_to_aim = (aim_point - target_location).normalized()
+            target_location = target_location - (ball_to_aim * 95.0)
         else:
-            aim_point = Vec3(0.0, -5120.0 * team_sign, 0.0)
+            allow_boost = False
 
-        ball_to_aim = (aim_point - target_location).normalized()
-        target_location = target_location - (ball_to_aim * 95.0)
+            shadow_x = ball_location.x * 0.45
+            shadow_y = (ball_location.y + own_goal_y) * 0.5
+            target_location = Vec3(shadow_x, shadow_y, 0.0)
+            
 
         # Draw some things to help understand what the bot is thinking
         self.renderer.draw_line_3d(
@@ -132,11 +151,16 @@ class MyBot(Bot):
             return controls
         if 750 < car_velocity.length() < 800:
             # We'll do a front flip if the car is moving at a certain speed.
-            return self.begin_front_flip(packet)
-
+                return self.begin_front_flip(packet)
         controls.steer = steer_toward_target(my_car, target_location)
-        controls.throttle = 1.0
+    
+        dist_to_target = car_location.dist(target_location)
+        if not ball_in_our_half and dist_to_target < 350:
+            controls.throttle = 0.2
+        else:
+            controls.throttle = 1.0
         # You can set more controls if you want, like controls.boost.
+        controls.boost = allow_boost and abs(angle_to_target) < 0.25 and my_car.boost > 25
 
         return controls
 
