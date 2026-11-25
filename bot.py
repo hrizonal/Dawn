@@ -59,27 +59,31 @@ class MyBot(Bot):
         angle_to_target = math.atan2(dy, dx) - my_car.physics.rotation.yaw
         angle_to_target = (angle_to_target + math.pi) % (2 * math.pi) - math.pi
         self.renderer.begin_rendering()
+        if self.ball_prediction is not None and len(self.ball_prediction.slices) > 0:
+            # Check every 6th slice (every 0.05 seconds) up to 4 seconds ahead
+            for i in range(6, min(480, len(self.ball_prediction.slices)), 6):
+                ball_slice = self.ball_prediction.slices[i]
+                slice_loc = Vec3(ball_slice.physics.location)
+                time_until_slice = i / 120.0  # 120 slices per second in v5
 
-        if car_location.dist(ball_location) > 1500:
-            # We're far away from the ball, let's try to lead it a little bit
-            # self.ball_prediction can predict bounces, etc
-            ball_in_future = find_slice_at_time(
-                self.ball_prediction, packet.match_info.seconds_elapsed + 2
-         )
-            
-    # Only go for aerials if the ball is in our half, you've got >45 boost, and your facing it
+                # Only target slices low enough to hit on the ground (or low aerial)
+                max_hit_height = 650 if my_car.boost > 45 else 160
+                if slice_loc.z > max_hit_height:
+                    continue
+
+                # Estimate how long it takes Dawn to drive there
+                dist_to_slice = car_location.dist(slice_loc)
+                car_speed = max(car_velocity.length(), 1100.0)
+                time_to_reach = dist_to_slice / car_speed
+
+                if time_to_reach <= time_until_slice:
+                    target_location = slice_loc
+                    self.renderer.draw_line_3d(
+                        BallAnchor(0), target_location, self.renderer.cyan
+                    )
+                    break
+
         
-            # ball_in_future might be None if we don't have an adequate ball prediction right now, like during
-            # replays, so check it to avoid errors.
-            if ball_in_future is not None:
-                target_location = Vec3(ball_in_future.physics.location)
-
-                # BallAnchor(0) will dynamically start the point at the ball's current location
-                # 0 makes it reference the ball at index 0 in the packet.balls list
-                self.renderer.draw_line_3d(
-                    BallAnchor(0), target_location, self.renderer.cyan
-                )
-
         # Draw some things to help understand what the bot is thinking
         self.renderer.draw_line_3d(
             CarAnchor(self.index), target_location, self.renderer.white
