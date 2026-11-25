@@ -82,8 +82,19 @@ class MyBot(Bot):
                         BallAnchor(0), target_location, self.renderer.cyan
                     )
                     break
+        team_sign = -1 if my_car.team == 0 else 1
+        ball_in_our_half = (ball_location.y * team_sign) > -500
 
-        
+        if ball_in_our_half:
+            clear_x = 2500.0 if target_location.x >= 0 else -2500.0
+            aim_point = Vec3(clear_x, -5120.0 * team_sign, 0.0)
+
+        else:
+            aim_point = Vec3(0.0, -5120.0 * team_sign, 0.0)
+
+        ball_to_aim = (aim_point - target_location).normalized()
+        target_location = target_location - (ball_to_aim * 95.0)
+
         # Draw some things to help understand what the bot is thinking
         self.renderer.draw_line_3d(
             CarAnchor(self.index), target_location, self.renderer.white
@@ -99,8 +110,7 @@ class MyBot(Bot):
             target_location + Vec3(0, 0, 50),
             self.renderer.cyan,
         )
-        team_sign = -1 if my_car.team == 0 else 1
-        ball_in_our_half = (ball_location.y * team_sign) > -500
+        
         self.renderer.end_rendering()
         
         should_aerial = (ball_in_our_half
