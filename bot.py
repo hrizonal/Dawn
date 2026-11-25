@@ -1,6 +1,7 @@
+import math
 from typing import override
 
-from rlbot.flat import BallAnchor, ControllerState, GamePacket
+from rlbot.flat import AirState, BallAnchor, ControllerState, GamePacket
 from rlbot.managers import Bot
 from rlbot_flatbuffers import CarAnchor
 
@@ -26,7 +27,7 @@ class MyBot(Bot):
         This function will be called by the framework many times per second. This is where you can
         see the motion of the ball, etc. and return controls to drive your car.
         """
-
+        controls = ControllerState()
         # Keep our boost pad info updated with which pads are currently active
         self.boost_pad_tracker.update_boost_status(packet)
 
@@ -48,7 +49,15 @@ class MyBot(Bot):
 
         # By default we will chase the ball, but target_location can be changed later
         target_location = ball_location
+        
+        target_x = ball_location.x
+        target_y = ball_location.y
 
+        dx = target_x - car_location.x
+        dy = target_y - car_location.y
+        dist_2d = math.hypot(dx, dy)
+        angle_to_target = math.atan2(dy, dx) - my_car.physics.rotation.yaw
+        angle_to_target = (angle_to_target + math.pi) % (2 * math.pi) - math.pi
         self.renderer.begin_rendering()
 
         if car_location.dist(ball_location) > 1500:
@@ -56,8 +65,10 @@ class MyBot(Bot):
             # self.ball_prediction can predict bounces, etc
             ball_in_future = find_slice_at_time(
                 self.ball_prediction, packet.match_info.seconds_elapsed + 2
-            )
-
+         )
+            
+    # Only go for aerials if the ball is in our half, you've got >45 boost, and your facing it
+        
             # ball_in_future might be None if we don't have an adequate ball prediction right now, like during
             # replays, so check it to avoid errors.
             if ball_in_future is not None:
@@ -84,14 +95,31 @@ class MyBot(Bot):
             target_location + Vec3(0, 0, 50),
             self.renderer.cyan,
         )
-
+        team_sign = -1 if my_car.team == 0 else 1
+        ball_in_our_half = (ball_location.y * team_sign) > -500
         self.renderer.end_rendering()
-
+        
+        should_aerial = (ball_in_our_half
+                        and 220 < ball_location.z < 850
+                        and dist_2d < 2200
+                        and my_car.boost > 45
+                        and abs(angle_to_target) < 0.35)
+        if should_aerial:
+            if my_car.air_state == AirState.OnGround:
+                controls.jump = True
+            else: 
+                height_diff = ball_location.z - car_location.z
+                target_pitch = math.atan2(height_diff, max(dist_2d, 1.0))
+                pitch_error = target_pitch - my_car.physics.rotation.pitch
+                
+                controls.pitch = max(-1.0, min(1.0, pitch_error * 3.0))
+                controls.yaw = max(-1.0, min(1.0, angle_to_target * 2.5))
+                controls.boost = True
+            return controls
         if 750 < car_velocity.length() < 800:
             # We'll do a front flip if the car is moving at a certain speed.
             return self.begin_front_flip(packet)
 
-        controls = ControllerState()
         controls.steer = steer_toward_target(my_car, target_location)
         controls.throttle = 1.0
         # You can set more controls if you want, like controls.boost.
