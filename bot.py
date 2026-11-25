@@ -58,7 +58,7 @@ class MyBot(Bot):
         dist_2d = math.hypot(dx, dy)
         angle_to_target = math.atan2(dy, dx) - my_car.physics.rotation.yaw
         angle_to_target = (angle_to_target + math.pi) % (2 * math.pi) - math.pi
-        self.renderer.begin_rendering()
+        
         
         if abs(ball_location.x) < 10 and abs(ball_location.y) < 10:
             controls.steer = steer_toward_target(my_car, ball_location)
@@ -69,6 +69,7 @@ class MyBot(Bot):
                 return self.begin_front_flip(packet)
 
             return controls
+            self.renderer.begin_rendering()
 
         team_sign = -1 if my_car.team == 0 else 1
         own_goal_y = 5120.0 * team_sign
